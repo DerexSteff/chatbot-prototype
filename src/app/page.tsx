@@ -99,9 +99,66 @@ export default function App() {
     setUserPrompt('')
   }
 
+  // !!!! WITH BACKEND
+  const [incomingMessage, setIncomingMessage] = useState('START: ')
+  const submitUserPromptWithBackend = async () => {
+    if (userPrompt === "") return;
+    // append user prompt
+    const newChatHistory = chatHistory.slice();
+    newChatHistory.push({
+      contents: [
+        {
+          content: userPrompt,
+          type: "text"
+        }
+      ],
+      isChatbot: false
+    });
+    setChatHistory(newChatHistory);
+
+    // make sse request to the backend
+    const response = await fetch(`http://localhost:8000/chat_stream/${encodeURIComponent(userPrompt)}`, {
+      headers: {
+        "Access-Control-Allow-Origin": "*"
+      }
+    });
+
+    // process the response from AI as it comes in
+    if (!response.body) return;
+    const reader = response.body
+      .pipeThrough(new TextDecoderStream())
+      .getReader();
+    
+    newChatHistory.push({
+      contents: [
+        {
+          content: incomingMessage,
+          type: "text"
+        }
+      ],
+      isChatbot: true
+    });
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      //console.log(value)
+      const lines = value
+        .toString()
+        .split("\n")
+        .filter((line) => line.trim() !== "");
+      for (const line of lines) {
+        const message = line.replace(/^data: /, "");
+        const parsedMessage = JSON.parse(message).valor;
+        setIncomingMessage((prevMessage) => prevMessage + parsedMessage);
+      }
+    }
+    setChatHistory(() => newChatHistory);
+  }
+
   // Save chat history in local storage
   useEffect(() => {
-    localStorage.setItem('chatHistory', JSON.stringify(chatHistory));
+    //localStorage.setItem('chatHistory', JSON.stringify(chatHistory));
   }, [chatHistory])
 
   const clearChatHistory = () => {
@@ -120,10 +177,11 @@ export default function App() {
             <div className="grid gap-4">
               { chatHistory.map((chatEntry, index) => <ChatMessage key={index}  chatEntry={chatEntry} />) }
             </div>
+            <div className="bg-red-300">{incomingMessage}</div>
           </div>
           <div className="flex gap-3">
             <Input type="text" placeholder="Insert your prompt here..." value={userPrompt} onChange={e => setUserPrompt(e.target.value)}/>
-            <Button type="submit" onClick={submitUserPrompt}>Send</Button>
+            <Button type="submit" onClick={submitUserPromptWithBackend}>Send</Button>
             <Button variant={'destructive'} onClick={clearChatHistory}>Delete chat history</Button>
           </div>
         </div>
