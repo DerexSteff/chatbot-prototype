@@ -153,8 +153,13 @@ export default function App() {
         setIncomingMessage((prevMessage) => prevMessage + parsedMessage);
       }
     }
-    setChatHistory(() => newChatHistory);
   }
+
+  useEffect(() => {
+    let chatEntry = chatHistory.slice(-1)[0];
+    chatEntry.contents[0].content = incomingMessage
+  }, [incomingMessage])
+
 
   // Save chat history in local storage
   useEffect(() => {
